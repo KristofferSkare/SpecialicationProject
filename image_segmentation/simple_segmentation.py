@@ -5,13 +5,67 @@ import os
 import sklearn.decomposition
 import sklearn.cluster
 import scipy.signal
+import cv2
 
 
 def single_channel_gradient(image, channel=0):
     image = image[:,:,channel]
-    X_kernel = np.array([[1,0,-1],[2,0,-2],[1,0,-1]])
+    X_kernel = np.array([[1,
+    0,-1],[2,0,-2],[1,0,-1]])
     Y_kernel = np.array([[1,2,1],[0,0,0],[-1,-2,-1]])
     return scipy.signal.convolve2d(image, X_kernel, mode='same'), scipy.signal.convolve2d(image, Y_kernel, mode='same')
+
+def color_in_range(image, color1, color2):
+    hsv_img = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    mask = cv2.inRange(hsv_img, color1, color2)/255
+    return mask
+
+def filter_out_isolated_pixels(image):
+    isolated_filter = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]])
+    isolation = scipy.signal.convolve2d(image, isolated_filter, mode='same')
+    black_isolated = np.where(isolation == -8)
+    white_isolated = np.where(isolation == 8)
+    image[black_isolated] = 1
+    image[white_isolated] = 0
+    return image
+
+def filter_small_regions_dbscan(mask, region_threshold=10, max_iterations=2):
+    filtered_mask = mask
+ 
+    dbscan = sklearn.cluster.DBSCAN(p=2, eps=1, min_samples=1)
+  
+    # Must run several times to remove regions that can have been created by the removal of smaller regions last iterations
+    # I think 2 iterations are enough, but not sure
+    i=0
+    while i < max_iterations:
+        white_pixels = np.where(filtered_mask==1)
+        black_pixels = np.where(filtered_mask==0)
+        white_clusters = dbscan.fit_predict(np.array(white_pixels).T)
+        black_clusters = dbscan.fit_predict(np.array(black_pixels).T)
+        invalid_white_regions = np.where(np.bincount(white_clusters) < region_threshold)[0]
+        invalid_black_regions = np.where(np.bincount(black_clusters) < region_threshold)[0]
+
+        if len(invalid_white_regions) == 0 and len(invalid_black_regions) == 0:
+            break
+
+        for c in invalid_white_regions:
+            filtered_mask[white_pixels[0][white_clusters==c], white_pixels[1][white_clusters==c]] = 0
+
+        for c in invalid_black_regions:
+            filtered_mask[black_pixels[0][black_clusters==c], black_pixels[1][black_clusters==c]] = 1
+        
+        i+=1
+    return filtered_mask
+
+def segment_green(image, low_hsv=(32, 0.1*255, 0.1*255), high_hsv = (80, 255, 255)):
+    # This is probably the best one yet
+    mask = color_in_range(image, low_hsv, high_hsv)
+    filtered_mask = filter_small_regions_dbscan(mask, region_threshold=mask.size*0.0005) 
+
+    filtered_mask.resize((*mask.shape, 1))
+    return (image*filtered_mask).astype(np.int32), filtered_mask    
+
+
 
 def color_abs_gradient(image):
     gradients = np.zeros((*image.shape[:-1], 6))
@@ -67,11 +121,14 @@ def add_neighbor_features(X):
             X_[:,:,:,n*(3*i+j):n*(3*i+j+1)] = np.roll(np.roll(X, rolls[i], axis=1), rolls[j], axis=2)
     return X_
 
+def relative_image(X):
+    return X/np.sum(X, axis=3, keepdims=True)
+
 def add_relative_features(X):
     #return X/np.sum(X, axis=3, keepdims=True)
     X_ = np.zeros((X.shape[0], X.shape[1], X.shape[2], X.shape[3]*2))
     X_[:,:,:,0:X.shape[3]] = X/255
-    X_[:,:,:,X.shape[3]:] = X/np.sum(X, axis=3, keepdims=True)
+    X_[:,:,:,X.shape[3]:] = relative_image(X)
     return X_
    
 
@@ -116,19 +173,40 @@ def mean_shift_clustering(image):
     clustered_image = clusters_colored.reshape(image.shape)
     return clustered_image
 
+def shadow_remove(img):
+    # Does not seem to work well: https://medium.com/arnekt-ai/shadow-removal-with-open-cv-71e030eadaf5
+    rgb_planes = cv2.split(img)
+    result_norm_planes = []
+    for plane in rgb_planes:
+        dilated_img = cv2.dilate(plane, np.ones((7,7), np.uint8))
+        bg_img = cv2.medianBlur(dilated_img, 21)
+        diff_img = 255 - cv2.absdiff(plane, bg_img)
+        norm_img = cv2.normalize(diff_img,None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+        result_norm_planes.append(norm_img)
+    shadowremov = cv2.merge(result_norm_planes)
+    return shadowremov
+
 
 if __name__ == "__main__":
 
     X = load_data("./data/plants", shape=(150,150))
-    index = 1
+    index = 3
 
-    # Mean shift clustering
-    clustered_image = mean_shift_clustering(X[index])
-    plt.imshow(clustered_image)
+    image = X[index]
+    
+    # This is probably the best one yet
+    segmented_image, mask = segment_green(image)
+    plt.subplot(1,3,1)
+    plt.imshow(image)
+    plt.subplot(1,3,2)
+    plt.imshow(mask, vmin=0, vmax=1, cmap="gray")
+    plt.subplot(1,3,3)
+    plt.imshow(segmented_image)
     plt.show()
-
-    # Harris detector
+   
+  
     '''
+    # Harris detector
     image = color_harris_image(X[index], kappa=0.15)
     edge = (image < np.min(image)*0.0001).astype(np.float)
     corner = (image > np.max(image)*0.0001).astype(np.float)

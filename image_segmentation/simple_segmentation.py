@@ -190,7 +190,7 @@ def shadow_remove(img):
 if __name__ == "__main__":
 
     X = load_data("./data/plants", shape=(150,150))
-    index = 3
+    index = 0
 
     image = X[index]
     

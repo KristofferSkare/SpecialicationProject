@@ -183,26 +183,53 @@ def shadow_remove(img):
         diff_img = 255 - cv2.absdiff(plane, bg_img)
         norm_img = cv2.normalize(diff_img,None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
         result_norm_planes.append(norm_img)
-    shadowremov = cv2.merge(result_norm_planes)
-    return shadowremov
+    shadowremove = cv2.merge(result_norm_planes)
+    return shadowremove
 
 
+def edge_regions(image, threshold=0.1):
+    abs_grad = color_abs_gradient(image)
+    abs_grad = (abs_grad - np.min(abs_grad))/(np.max(abs_grad) -np.min(abs_grad))
+    plt.imshow(abs_grad < threshold, cmap='gray')
+    plt.show() 
+    edges = np.array(np.where(abs_grad < threshold)).T
+    dbscan = sklearn.cluster.DBSCAN(p=2, eps=1, min_samples=1)
+    
+    cluster_masks = []
+    clusters = dbscan.fit_predict(edges)
+
+    c = np.max(clusters) + 1
+    print(c)
+    for i in range(c):
+        cluster_coords = edges[clusters == i]
+        mask = np.zeros_like(abs_grad)
+        mask[cluster_coords[:,0], cluster_coords[:,1]] = 1
+        cluster_masks.append(mask)
+        plt.imshow(mask)
+        plt.show()
+    return cluster_masks
+    
+    
 if __name__ == "__main__":
 
     X = load_data("./data/plants", shape=(150,150))
     index = 2
 
     image = X[index]
-    
-    # This is probably the best one yet
     segmented_image, mask = segment_green(image)
-    plt.subplot(1,3,1)
-    plt.imshow(image)
-    plt.subplot(1,3,2)
-    plt.imshow(mask, vmin=0, vmax=1, cmap="gray")
-    plt.subplot(1,3,3)
     plt.imshow(segmented_image)
     plt.show()
+    edge_regions(segmented_image)
+
+    # This is probably the best one yet
+    # 
+    # plt.subplot(1,3,1)
+    # plt.imshow(image)
+    # plt.subplot(1,3,2)
+    # plt.imshow(mask, vmin=0, vmax=1, cmap="gray")
+    # plt.subplot(1,3,3)
+    # plt.imshow(segmented_image)
+    # plt.show()
    
   
     '''

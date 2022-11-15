@@ -1,0 +1,5 @@
+setup.py
+tempertaure.egg-info/PKG-INFO
+tempertaure.egg-info/SOURCES.txt
+tempertaure.egg-info/dependency_links.txt
+tempertaure.egg-info/top_level.txt

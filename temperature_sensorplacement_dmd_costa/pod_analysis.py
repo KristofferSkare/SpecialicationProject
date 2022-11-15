@@ -6,8 +6,12 @@ import matplotlib.animation as animation
 from temperature_simulation import load_simulations, data_folder
 
 
-POD_file = "temperature_sensorplacement_dmd_costa/data/temperature_simulations_POD.npy"
-reconstruction_file = "temperature_sensorplacement_dmd_costa/data/temperature_reconstruction_POD.npy"
+absolute_path = os.path.dirname(__file__)
+
+
+
+POD_file =  "data/temperature_simulations_POD.npy"
+reconstruction_file =  "data/temperature_reconstruction_POD.npy"
 
 
 
@@ -69,12 +73,18 @@ def find_POD(n_modes = 10, mean_center=True):
     return Phi, L, RIC, X_mean
 
 
-def load_POD():
-    data = np.load(POD_file, allow_pickle=True).item()
+def load_POD(file = None):
+    if file is None:
+        file = POD_file
+    abs_path = os.path.join(absolute_path, file)
+    data = np.load(abs_path, allow_pickle=True).item()
     return data["phi"], data["l"], data["ric"], data["mean"]
 
-def load_reconstruction():
-    return np.load(reconstruction_file)
+def load_reconstruction(file = None):
+    if file is None:
+        file = reconstruction_file
+    abs_path = os.path.join(absolute_path, file)
+    return np.load(abs_path)
 
 
 def reconstruction_analysis(n_modes_used=4):
@@ -133,7 +143,7 @@ def reconstruction_movie(X,X_rec, sim_number=0,dt=0.1):
 
 if __name__ == "__main__":
     
-    find_POD(n_modes=20, mean_center=False)
+    #find_POD(n_modes=20, mean_center=False)
     data, reconstruction = reconstruction_analysis(8)
     #data = load_simulations()
     #reconstruction = load_reconstruction()

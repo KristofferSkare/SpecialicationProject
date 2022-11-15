@@ -4,9 +4,12 @@ import matplotlib.pyplot as plt
 from pod_analysis import load_POD, POD_file, reconstruction_file
 from temperature_simulation import load_simulations
 import matplotlib.animation as animation
+import os
 
-rec_file = "temperature_sensorplacement_dmd_costa/data/temperature_reconstruction_sensors.npy"
-sensor_placement_file = "temperature_sensorplacement_dmd_costa/data/temperature_sensor_placement.npy"
+absolute_path = os.path.dirname(__file__)
+
+rec_file = "data/temperature_reconstruction_sensors.npy"
+sensor_placement_file ="data/temperature_sensor_placement.npy"
 
 def qr_pivots(Psi_r, num_eigen, num_sensors=None):
     if num_sensors is None:
@@ -97,11 +100,20 @@ def analyze_errors(X, X_rec):
     print("Mean error: ", np.mean(errors))
     print("Std error: ", np.std(errors))
 
-def load_sensorplacement():
-    data = np.load(sensor_placement_file, allow_pickle=True).item()
+def load_sensorplacement(file=None):
+    if file is None:
+        file = sensor_placement_file
+    abs_path = os.path.join(absolute_path, file)
+    data = np.load(abs_path, allow_pickle=True).item()
     C = data["C"]
     Theta_inv = data["Theta_inv"]
     return C, Theta_inv
+
+def load_reconstruction(file=None):
+    if file is None:
+        file = rec_file 
+    abs_path = os.path.join(absolute_path, file)
+    return np.load(abs_path)
 
 if __name__ == "__main__":
     find_sensor_placement_and_reconstruct(num_modes_used=8)

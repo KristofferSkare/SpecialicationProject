@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-data_folder = "temperature_sensorplacement_dmd_costa/data/temperature_simulations/"
-data_file = "temperature_sensorplacement_dmd_costa/data/temperature_simulations.npy"
+absolute_path = os.path.dirname(__file__)
+
+data_folder = "data/temperature_simulations/"
+data_file = "data/temperature_simulations.npy"
 
 
 def initialize(seed):
@@ -57,8 +59,11 @@ def save_simulations_in_single_array(skip_beginning=None, skip_end=None, time_st
     np.save(data_file, data)
 
 
-def load_simulations():
-    return np.load(data_file)
+def load_simulations(file=None):
+    if file is None:
+        file = data_file
+    abs_path = os.path.join(absolute_path, file)
+    return np.load(abs_path)
 
 if __name__ == "__main__":
     ### Main settings for all simulations

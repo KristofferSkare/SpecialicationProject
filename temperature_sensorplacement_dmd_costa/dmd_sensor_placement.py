@@ -3,8 +3,11 @@ from sensor_placement import load_sensorplacement, reconstruction_movie
 from pod_analysis import load_POD
 from temperature_simulation import load_simulations
 import numpy as np
+import os
 
-sensor_dmd_file = "temperature_sensorplacement_dmd_costa/data/temperature_sensor_dmd_reconstruction.npy"
+absolute_path = os.path.dirname(__file__)
+
+sensor_dmd_file =  "data/temperature_sensor_dmd_reconstruction.npy"
 
 def sensor_dmd_prediction(C, Theta_inv, D, W, W_inv, U, X0, nsteps):
     X = np.zeros((nsteps, *X0.shape))
@@ -38,8 +41,11 @@ def sensor_dmd_analysis(modes_used, num_steps=None):
     np.save(sensor_dmd_file, X)
     return X
     
-def load_sensor_dmd_reconstruction():
-    return np.load(sensor_dmd_file)
+def load_sensor_dmd_reconstruction(file = None):
+    if file is None:
+        file = sensor_dmd_file
+    abs_path = os.path.join(absolute_path, file)
+    return np.load(abs_path)
 
 if __name__ == "__main__":
     sensor_dmd_analysis(8)

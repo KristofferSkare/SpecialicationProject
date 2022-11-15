@@ -3,9 +3,13 @@ from temperature_simulation import load_simulations
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import os
 
-DMD_file = "temperature_sensorplacement_dmd_costa/data/temperature_DMD.npy"
-DMD_rec_file = "temperature_sensorplacement_dmd_costa/data/temperature_reconstruction_DMD.npy"
+absolute_path = os.path.dirname(__file__)
+
+
+DMD_file =  "data/temperature_DMD.npy"
+DMD_rec_file = "data/temperature_reconstruction_DMD.npy"
 
 def format_dmd_data(data, X_mean, Vr):
     nsims, nsteps, nx, ny = data.shape
@@ -34,8 +38,11 @@ def DMD(data, Ur, Sigma, Vr, X_mean):
     np.save(DMD_file, {"Atilde": Atilde, "D": D, "W": W,"W_inv":W_inv,  "dmd_modes": Phi})
     return Atilde, D, W, W_inv, Phi
 
-def load_whole_POD():
-    data = np.load(POD_file, allow_pickle=True).item()
+def load_whole_POD(file=None):
+    if file is None:
+        file = POD_file
+    abs_path = os.path.join(absolute_path, file)
+    data = np.load(abs_path, allow_pickle=True).item()
     return data["phi"], data["l"], data["ric"], data["mean"], data["sigma"], data["vr"]
 
 def dmd_prediction(D,W,W_inv,U, X0, nsteps):
@@ -47,8 +54,11 @@ def dmd_prediction(D,W,W_inv,U, X0, nsteps):
         D_i = D_i @ np.diag(D)
     return X
 
-def load_dmd_modes():
-    data = np.load(DMD_file, allow_pickle=True).item()
+def load_dmd_modes(file=None):
+    if file is None:
+        file = DMD_file
+    abs_path = os.path.join(absolute_path, file)
+    data = np.load(abs_path, allow_pickle=True).item()
     return data["Atilde"], data["D"], data["W"], data["W_inv"], data["dmd_modes"]
 
 def dmd_analysis_and_reconstruction(modes_used=None, calculate_dmd=True, num_steps=None):
@@ -81,11 +91,14 @@ def dmd_analysis_and_reconstruction(modes_used=None, calculate_dmd=True, num_ste
     return data, X
 
 
-def load_dmd_reconstruction(num_steps=None):
+def load_dmd_reconstruction(num_steps=None, file=None):
+    if file is None:
+        file = DMD_rec_file
+    abs_path = os.path.join(absolute_path, file)
     if num_steps is None:
-        return np.load(DMD_rec_file)
+        return np.load(abs_path)
     else:
-        return np.load(DMD_rec_file.replace(".npy", "_" + str(num_steps) +"_steps"+ ".npy"))
+        return np.load(abs_path.replace(".npy", "_" + str(num_steps) +"_steps"+ ".npy"))
 
 def reconstruction_movie(X, X_rec, sim_number=0, dt=0.01):
 

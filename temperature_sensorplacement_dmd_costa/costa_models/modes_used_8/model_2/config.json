@@ -1,0 +1,15 @@
+{
+    "data_file": "data/temperature_simulations.npy",
+    "pod_file": "data/temperature_simulations_POD.npy",
+    "sensor_placement_file": "data/temperature_sensor_placement.npy",
+    "dmd_file": "data/temperature_DMD.npy",
+    "sensor_layers": [16,16,16,16,16],
+    "prediction_layers": [16,16,16,16,16],
+    "reconstruction_layers": [32,16,8,16,32],
+    "dt": 0.1,
+    "l1_weight": 1,
+    "loss_weights": {"X": 1, "a": 1e-4},
+    "batch_size": 64,
+    "num_pred_steps": 31,
+    "num_modes_used": 8
+}

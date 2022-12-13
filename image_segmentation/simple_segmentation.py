@@ -7,6 +7,11 @@ import sklearn.cluster
 import scipy.signal
 import cv2
 
+absolute_path = os.path.dirname(__file__)
+
+data_folder = "../data/"
+plants_folder = "../data/plant_box/"
+plants_subfolders = os.listdir(os.path.join(absolute_path,plants_folder))
 
 def single_channel_gradient(image, channel=0):
     image = image[:,:,channel]
@@ -132,24 +137,39 @@ def add_relative_features(X):
     return X_
    
 
-def PCA_clustering(X, num_components=3):
+def PCA_clustering(X, num_components=3, num_clusters=3, normalize=True):
+    N=-1
     if len(X.shape) == 3:
         X_ = X
     else:
-        scale = np.std(X, axis=0)
-        mean = np.mean(X, axis=0)
-        X_ = (X - mean) /scale 
+        N = X.shape[0]
+        if normalize:
+           
+            scale = np.std(X, axis=0)
+            scale[np.where(scale==0)] = 1
+            mean = np.mean(X, axis=0)
+            X_ = (X - mean) /scale 
+        else:
+            X_ = X
+
     pca = sklearn.decomposition.PCA(n_components=num_components)
 
     Y = pca.fit_transform(X_.reshape(-1, X_.shape[-1]))
-    clust_alg = sklearn.cluster.KMeans(n_clusters=4)
+    clust_alg = sklearn.cluster.KMeans(n_clusters=num_clusters)
     clusters = clust_alg.fit_predict(Y)
     clustered_data = clusters.reshape(X.shape[:-1])
     min_c = np.min(clustered_data)
     max_c = np.max(clustered_data)
-    fig, ax = plt.subplots(1,2)
-    ax[0].imshow(X[:,:,:3])
-    ax[1].imshow((clustered_data- min_c)/(max_c-min_c))
+    
+    if N == -1:
+        fig, ax = plt.subplots(2,1)
+        ax[0].imshow(X[:,:,:3])
+        ax[1].imshow((clustered_data- min_c)/(max_c-min_c))
+    else:
+        fig, ax = plt.subplots(2,N)
+        for i in range(N):
+            ax[0,i].imshow(X[i,:,:,:3])
+            ax[1,i].imshow((clustered_data[i]- min_c)/(max_c-min_c))
     plt.show()
 
 
@@ -205,31 +225,128 @@ def edge_regions(image, threshold=0.1):
         mask = np.zeros_like(abs_grad)
         mask[cluster_coords[:,0], cluster_coords[:,1]] = 1
         cluster_masks.append(mask)
-        plt.imshow(mask)
-        plt.show()
+        if (np.sum(mask) > 100):
+            plt.imshow(mask, cmap='gray')
+            plt.show()
     return cluster_masks
     
-    
+def load_plant_images(subfolder_indexes=[0], size=(256, 256)): 
+    plant_images = []
+    for subfolder_index in subfolder_indexes:
+        folder = os.path.join(absolute_path, plants_folder, plants_subfolders[subfolder_index])
+        plant_images.append(load_data(folder, size))
+    return np.array(plant_images)
+
+
+def diff_images_in_series(images):
+    N = images.shape[0]
+    diff_images = np.zeros((N,N, *images.shape[1:]))
+    sum_diff_images = np.zeros((N,N, *images.shape[1:-1]))
+    for i in range(N):
+        for j in range(N):
+            diff = np.abs(images[i] - images[j])
+            sum_diff = np.sum(diff, axis=-1)
+            diff_images[i,j] = diff
+            sum_diff_images[i,j] = sum_diff
+    return diff_images, sum_diff_images
+
+def cumulative_small_diff_from_mean(images, threshold=0.1):
+    N = images.shape[0]
+    mask = np.zeros(images[0].shape[:-1])
+    mean = images.mean(axis=0).astype(int)
+    individual_masks = np.zeros((N, *images[0].shape[:-1]))
+    for i in range(N):
+        diff_from_mean = np.abs(images[i] - mean)
+        diff_from_mean = diff_from_mean.sum(axis=-1)
+        diff_from_mean = diff_from_mean/np.max(diff_from_mean)
+        not_small_diff = np.zeros_like(diff_from_mean)
+        not_small_diff[np.where(diff_from_mean > threshold)] = 1
+        mask[np.where(not_small_diff)] = 1      
+        individual_masks[i] = not_small_diff 
+    return mask, individual_masks
+
+def cumulative_small_diff(images, threshold=0.1):
+    N = images.shape[0]
+    mask = np.zeros(images[0].shape[:-1])
+    mean = images.mean(axis=0).astype(int)
+    individual_masks = np.zeros((N, *images[0].shape[:-1]))
+    for i in range(N):
+        indexes = [*range(0,i), *range(i+1,N)]
+        diff = np.abs(images[[i]*(N-1)] - images[indexes])
+        mean_diff = np.mean(diff, axis=0)
+        mean_diff = mean_diff.sum(axis=-1)
+        mean_diff = mean_diff/np.max(mean_diff)
+        not_small_diff = np.zeros_like(mean_diff)
+        not_small_diff[np.where(mean_diff > threshold)] = 1
+        mask[np.where(not_small_diff)] = 1      
+        individual_masks[i] = not_small_diff 
+    return mask, individual_masks
+
+def blur_mask(mask, kernel_size=21, sigma=5, threshold=0.1):
+    blurred_mask = cv2.GaussianBlur(mask, (kernel_size, kernel_size), sigma)
+    blurred_mask = blurred_mask/np.max(blurred_mask)
+    blurred_mask = blurred_mask > threshold
+    return blurred_mask
+
+def take_largest_mask_region(mask):
+    white_pixels = np.array(np.where(mask)).T
+    dbscan = sklearn.cluster.DBSCAN(p=2, eps=1, min_samples=1)
+    clusters = dbscan.fit_predict(white_pixels)
+    unique_cluster, counts = np.unique(clusters, return_counts=True)
+    largest_cluster = unique_cluster[np.argmax(counts)]
+    largest_cluster_mask = np.zeros_like(mask)
+    largest_cluster_pixels = white_pixels[np.where(clusters == largest_cluster)].T
+    largest_cluster_mask[largest_cluster_pixels[0], largest_cluster_pixels[1]] = 1
+    return largest_cluster_mask
+
+def show_masks(images, masks):
+    fig, ax = plt.subplots(3, N)
+    for i in range(N):
+        ax[0,i].imshow(masks[i], cmap='gray')
+        ax[1,i].imshow(images[i])
+        ax[2,i].imshow(images[i]*masks[i][:,:,np.newaxis].astype(int))
+    plt.show()
+
+
+def mask_image_series(images, mean_diff_threshold=0.1, blur_kernel_size=21, blur_sigma=5, blur_mask_threshold=0.1, smallest_region_threshold=10):
+    cum_mask, masks = cumulative_small_diff_from_mean(images, threshold=mean_diff_threshold)
+    #show_masks(images, masks)
+    blurred_masks = [blur_mask(mask, kernel_size=blur_kernel_size, sigma=blur_sigma, threshold=blur_mask_threshold) for mask in masks]
+    #show_masks(images, blurred_masks)
+    mask_no_small_regions = [filter_small_regions_dbscan(blurred_mask, region_threshold=smallest_region_threshold) for blurred_mask in blurred_masks]
+    #show_masks(images, mask_no_small_regions)
+    largest_region_mask = [take_largest_mask_region(mask) for mask in mask_no_small_regions]
+    #show_masks(images, largest_region_mask)
+    return largest_region_mask
+
 if __name__ == "__main__":
 
-    X = load_data("./data/plants", shape=(150,150))
-    index = 2
+    # X = load_plant_images(subfolder_indexes=[2])
+    # images = X[0]
+    # N = images.shape[0]
+    # masks = mask_image_series(images, 
+    # mean_diff_threshold=0.1, 
+    # blur_kernel_size=21, 
+    # blur_sigma=3, 
+    # blur_mask_threshold=0.1,
+    # smallest_region_threshold=100)
+    # show_masks(images, masks)
+    # masked_images = np.array([images[i]*masks[i][:,:,np.newaxis].astype(int) for i in range(N)])
+    
 
-    image = X[index]
+    image = cv2.imread("data/plants/1.jfif")
+    #clusters  = PCA_clustering(image)
+    
+
+    #This is probably the best one yet
     segmented_image, mask = segment_green(image)
+    plt.subplot(1,3,1)
+    plt.imshow(image)
+    plt.subplot(1,3,2)
+    plt.imshow(mask, vmin=0, vmax=1, cmap="gray")
+    plt.subplot(1,3,3)
     plt.imshow(segmented_image)
     plt.show()
-    edge_regions(segmented_image)
-
-    # This is probably the best one yet
-    # 
-    # plt.subplot(1,3,1)
-    # plt.imshow(image)
-    # plt.subplot(1,3,2)
-    # plt.imshow(mask, vmin=0, vmax=1, cmap="gray")
-    # plt.subplot(1,3,3)
-    # plt.imshow(segmented_image)
-    # plt.show()
    
   
     '''

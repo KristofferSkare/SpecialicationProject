@@ -1,9 +1,11 @@
 import numpy as np
 import scipy.linalg
 import matplotlib.pyplot as plt
-from pod_analysis import load_POD, POD_file, reconstruction_file
+from pod_analysis import load_POD
+from pod_analysis import load_reconstruction as load_pod_reconstruction
 from temperature_simulation import load_simulations
 import matplotlib.animation as animation
+import matplotlib.colors as colors
 import os
 
 absolute_path = os.path.dirname(__file__)
@@ -92,6 +94,9 @@ def visualize_sensor_placement(C):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     im = ax.imshow(np.sum(C, axis=0).reshape(50,50), cmap="gray")
+    #plt.title("Positions of chosen sensors")
+    plt.xticks([])
+    plt.yticks([])
     plt.show()
 
 def analyze_errors(X, X_rec):
@@ -115,19 +120,129 @@ def load_reconstruction(file=None):
     abs_path = os.path.join(absolute_path, file)
     return np.load(abs_path)
 
-if __name__ == "__main__":
-    find_sensor_placement_and_reconstruct(num_modes_used=8)
+def plot_error(exp=2):
+    X = load_simulations()
+    X_rec = load_reconstruction()
+    errors = np.abs(X - X_rec)**exp
+    errors = np.sum(errors, axis=(2,3))
+    flat_errors = errors.flatten()
+    plt.figure()
+    plt.hist(flat_errors, bins=np.logspace(np.log10(np.min(flat_errors)), np.log10(np.max(flat_errors)), 100))
+    plt.gca().set_xscale("log")
+    plt.show()
+
+def plot_error_per_time(exp=1):
+    X = load_simulations()
+    X_rec = load_pod_reconstruction()
+    errors = np.abs(X - X_rec)**exp
+    errors = np.mean(errors, axis=(2,3))
+    plt.figure()
+    mean = np.mean(errors, axis=0)
+    std = np.std(errors, axis=0)
+    min = np.min(errors, axis=0)
+    max = np.max(errors, axis=0)
+    plt.plot(mean)
+    plt.fill_between(np.arange(mean.size), mean-std, mean+std, alpha=0.25)
+    plt.ylabel("MAE")
+    plt.xlabel("Time step")
+    #plt.fill_between(np.arange(mean.size), min, max, alpha=0.25)
+    #plt.yscale("log")
+    plt.figure()
+    mean_per_sim = np.mean(errors, axis=1)
+    indexes = np.argsort(mean_per_sim)
+    
+    mean_per_sim_sorted = mean_per_sim[indexes]
+    std_per_sim = np.std(errors, axis=1)
+    std_per_sim_sorted = std_per_sim[indexes]
+    plt.plot(mean_per_sim_sorted)
+    plt.fill_between(np.arange(mean_per_sim.size), mean_per_sim_sorted-std_per_sim_sorted, mean_per_sim_sorted+std_per_sim_sorted, alpha=0.25)
+    plt.ylabel("MAE")
+    plt.xlabel("Time step")
+    plt.show()
+    
+def show_error_position(with_sensor_placement=True):
+    X = load_simulations()
+    X_rec = load_reconstruction()
+    errors = np.abs(X - X_rec)
+    errors = np.mean(errors, axis=(0,1))
+    
+    plt.figure()
+    plt.imshow(errors, cmap="gray")
+    plt.colorbar()
+    plt.xticks([])
+    plt.yticks([])
+    #plt.title("Mean absolute error per position")
+    if with_sensor_placement:
+        C, Theta_inv = load_sensorplacement()
+        C_im = np.sum(C, axis=0).reshape(50,50)
+        plt.imshow(C_im, cmap =colors.ListedColormap([(0,0,0,0), (1,0,0,1)]), vmin=0, vmax=1)
+    plt.show()
+
+def show_reconstruction(sim=0, time_step=0):
+    X = load_simulations()
+    X_rec = load_reconstruction()
     C, Theta_inv = load_sensorplacement()
+    x = X[sim, time_step]
+    x_rec = X_rec[sim, time_step]
+    y = np.dot(C, x.flatten())
+    y_im = (y*C.T).T.sum(axis=0).reshape(50,50).T
+    fig, ax = plt.subplots(2,3)
+    vmin = np.min([x, x_rec])
+    vmax = np.max([x, x_rec])
+    ax[0,0].imshow(x, cmap="hot", vmin=vmin, vmax=vmax)
+    ax[0,0].set_title("Original")
+    ax[0,1].imshow(y_im, cmap="hot", vmin=vmin, vmax=vmax)
+    ax[0,1].set_title("Measurements")
+    ax[0,2].imshow(x_rec, cmap="hot", vmin=vmin, vmax=vmax)
+    ax[0,2].set_title("Reconstruction")
+
+    error = np.abs(x - x_rec)
+    max_error = np.max(error)
+    ax[1,2].imshow(error, cmap="gray", vmin=0, vmax=max_error)
+    ax[1,2].set_title("Absolute Error")
+
+    for i in range(3):
+        ax[0,i].set_xticks([])
+        ax[0,i].set_yticks([])
+        ax[1,i].set_xticks([])
+        ax[1,i].set_yticks([])
+
+    ax[1,1].axis("off")
+    ax[1,0].axis("off")
+
+    cm_hot = plt.get_cmap("hot")
+    sm = plt.cm.ScalarMappable(cmap=cm_hot, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+
+    cm_gray = plt.get_cmap("gray")
+    sm2 = plt.cm.ScalarMappable(cmap=cm_gray, norm=plt.Normalize(vmin=0, vmax=max_error))
+    plt.colorbar(sm ,ax=ax[0,:])
+    plt.colorbar(sm2, ax=ax[1,:])
+    #plt.suptitle("Reconstruction from sparse measurements")
+    plt.show()
+
+if __name__ == "__main__":
+    #show_error_position(with_sensor_placement=False)
+    #show_reconstruction(sim=0, time_step=20)
+    #plot_error()
+    #plot_error_per_time(exp=1)
+    #find_sensor_placement_and_reconstruct(num_modes_used=8)
+    
+    C, Theta_inv = load_sensorplacement()
+    indexes = np.where(C==1)[1]
+    n = 50
+    print(indexes)
+    positions = np.array([indexes%n, indexes//n])
+    print(positions.T)
     visualize_sensor_placement(C)
     
     X = load_simulations()
-    X_pod = np.load(reconstruction_file)
-    X_rec = np.load(rec_file)
+    X_pod = load_pod_reconstruction()
+    X_rec = load_reconstruction()
     analyze_errors(X, X_pod)
     analyze_errors(X, X_rec)
 
     while True:
        sim_number = np.random.randint(0, X.shape[0])
        reconstruction_movie(X, X_pod,X_rec, sim_number=sim_number, dt=0.01)
-
+    
     pass

@@ -4,6 +4,7 @@ from pod_analysis import load_POD
 from temperature_simulation import load_simulations
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 
 absolute_path = os.path.dirname(__file__)
 
@@ -47,12 +48,41 @@ def load_sensor_dmd_reconstruction(file = None):
     abs_path = os.path.join(absolute_path, file)
     return np.load(abs_path)
 
-if __name__ == "__main__":
-    sensor_dmd_analysis(8)
+def plot_error(sim=None, exp=2):
+    X_ = load_simulations()
+    X_sensor_dmd_ = load_sensor_dmd_reconstruction()
+    if sim is None:
+        current_sim = np.random.randint(0, X_.shape[0])
+    else:
+        current_sim = sim
+   
+    while sim is None or sim == current_sim:
+        X = X_[current_sim]
+        X_sensor_dmd = X_sensor_dmd_[current_sim]
+        error = np.abs(X - X_sensor_dmd)**exp
+        se = np.sum(error, axis=(1,2))
+        plt.plot(se)
+        plt.show()
+        current_sim = np.random.randint(0, X.shape[0])
+
+def plot_all_error(exp=2):
+    X = load_simulations()
+    X_sensor_dmd = load_sensor_dmd_reconstruction()
+    error = np.abs(X - X_sensor_dmd)**exp
+    se = np.sum(error, axis=(2,3))
+    plt.plot(se.T)
+    plt.show()
+    
+
+def show_random_reconstruction_movies():
     X = load_simulations()
     X_dmd = load_dmd_reconstruction()
     X_sensor_dmd = load_sensor_dmd_reconstruction()
-
     while True:
         sim_number = np.random.randint(0, X.shape[0])
         reconstruction_movie(X, X_dmd, X_sensor_dmd, sim_number=sim_number, dt=0.01)
+
+if __name__ == "__main__":
+    #sensor_dmd_analysis(8)
+    plot_all_error(exp=1)
+    
